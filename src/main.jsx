@@ -1,4 +1,5 @@
 import React,{useEffect,useState,useRef} from 'react';
+import {AccountDialog} from './AccountDialog.jsx';
 import {Button,TextArea} from '@heroui/react';
 import {flushSync} from 'react-dom';
 import {createRoot} from 'react-dom/client';
@@ -8,13 +9,38 @@ async function api(path,data){
  const r=await fetch('/api/'+path,data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{});
  const v=await r.json();if(!r.ok)throw Error(v.error||'请求失败，请重试。');return v;
 }
+const variant={steps:[['独立算一算，x 等于几？','7','试着回忆上一题的两个运算。','先抵消常数，再让系数化一。']]};
 function App(){
  const [screen,go]=useState('home'),[problem,setProblem]=useState(''),[pic,setPic]=useState(''),[item,setItem]=useState(null),[step,S]=useState(0),[level,L]=useState(0),[hist,H]=useState([]),[answer,A]=useState(''),[error,E]=useState(''),[busy,B]=useState(false),[done,D]=useState(false),[online,O]=useState(false),[server,V]=useState(false);
+ const [user,setUser]=useState(null),[accounts,setAccounts]=useState(false),[panel,setPanel]=useState('');
  const conversation=useRef(null);
+ const sendTurn=(path,data)=>api(path,{...data,accountId:user?.id??null});
+ function changeAccount(next){
+  if(screen==='practice')reset();
+  setUser(next);
+ }
+ function openHistory(id,turns){
+  const first=turns[0],last=turns[turns.length-1];
+  const messages=[];
+  for(const row of turns){
+   if(row.turn_number>0)messages.push({role:'学生',text:row.student_text});
+   messages.push({role:'导师',text:row.tutor_text});
+  }
+  const local=first.mode==='local'?(first.tutor_text==='独立算一算，x 等于几？'?variant:lookup(first.problem)):null;
+  let index=0,hints=0;
+  if(local)for(const row of turns.slice(1)){
+   if(matches(row.student_text,local.steps[index][1])){index=Math.min(index+1,local.steps.length-1);hints=0;}
+   else hints=Math.min(hints+1,2);
+  }
+  conversation.current=id;
+  setProblem(first.problem);setPic('');setItem(local);S(index);L(hints);H(messages);
+  D(!!last.completed);A('');E('');setFailedReply(null);go('practice');
+  requestAnimationFrame(focusDraft);
+ }
  const [failedReply,setFailedReply]=useState(null);
  const focusDraft=()=>draft.current?.focus({preventScroll:true});
  const input=useRef(), camera=useRef(), end=useRef(), draft=useRef();
- useEffect(()=>{if(location.protocol!=='file:')api('status').then(s=>{V(true);O(s.online)}).catch(()=>{});},[]);
+ useEffect(()=>{if(location.protocol!=='file:')api('status').then(s=>{V(true);O(s.online);setAccounts(!!s.accounts);setUser(s.user??null)}).catch(()=>{});},[]);
  useEffect(()=>{if(hist.length>1)end.current?.scrollIntoView({block:'nearest'});},[hist]);
  function reset(){setFailedReply(null);conversation.current=null;go('home');setPic('');setProblem('');A('');D(false);H([]);E('');}
  function confirm(p='',img=''){setProblem(p);setPic(img);go('confirm');E('');}
@@ -40,8 +66,8 @@ function App(){
  });
  focusDraft();
  try{
-  const q=useLocal?local.steps[0][0]:(await api('turn',{id:conversation.current,problem:question,history:[],image})).message;
-  if(useLocal&&server)await api('record',{id:conversation.current,turn:0,problem:question,student:'',tutor:q,done:false});
+  const q=useLocal?local.steps[0][0]:(await sendTurn('turn',{id:conversation.current,problem:question,history:[],image})).message;
+  if(useLocal&&server)await sendTurn('record',{id:conversation.current,turn:0,problem:question,student:'',tutor:q,done:false});
   H([tutor(q)]);
  }catch(err){E(err.message)}finally{B(false);}
  }
@@ -51,7 +77,7 @@ function App(){
  focusDraft();E('');setFailedReply(null);B(true);H(next);
  if(!hint&&retry===null)A('');
  function failed(err){H(hist);setFailedReply({hint,reply});E(err.message);}
- if(!item){try{const r=await api('turn',{id:conversation.current,problem,history:next,image:pic});H([...next,tutor(r.message)]);D(r.done);}catch(err){failed(err);}finally{B(false);}return;}
+ if(!item){try{const r=await sendTurn('turn',{id:conversation.current,problem,history:next,image:pic});H([...next,tutor(r.message)]);D(r.done);}catch(err){failed(err);}finally{B(false);}return;}
  const [q,accepted,h1,h2]=item.steps[step];
  const correct=!hint&&matches(reply,accepted);
  const last=correct&&step+1===item.steps.length;
@@ -60,7 +86,7 @@ function App(){
   (hint?'':specific||'我们再核对一下这一步。')+(level===0?h1:h2)+(level>=1?' '+q:'');
  B(true);
  try{
-  if(server)await api('record',{id:conversation.current,turn:next.filter(m=>m.role==='学生').length,problem,student:reply,tutor:message,done:last});
+  if(server)await sendTurn('record',{id:conversation.current,turn:next.filter(m=>m.role==='学生').length,problem,student:reply,tutor:message,done:last});
   H([...next,tutor(message)]);D(last);if(correct&&!last)S(step+1);L(correct?0:Math.min(level+1,2));
  }catch(err){failed(err)}finally{B(false);}
  }
@@ -92,12 +118,13 @@ function App(){
    <Button type="submit" isIconOnly variant="primary" className="send" aria-label="发送" isDisabled={busy||!value.trim()||(chat&&!hist.length)}><Icon name="send"/></Button>
   </div>
  </form>;
- return <div className="app"><header><span className="brand"><span aria-hidden="true" className="brand-mark"><i/><i/></span>问阶</span>{(chat||pic)&&<Button className="new" isDisabled={busy} onPress={reset}><Icon name="new"/>新对话</Button>}</header>
+ return <div className="app"><header><span className="brand"><span aria-hidden="true" className="brand-mark"><i/><i/></span>问阶</span><nav aria-label="对话工具">{accounts&&<><Button className="new" isDisabled={busy} onPress={()=>setPanel('history')}>学习记录</Button>{!user&&<Button className="new login-trigger" isDisabled={busy} onPress={()=>setPanel('login')}>登录</Button>}</>}{(chat||pic)&&<Button className="new" isDisabled={busy} onPress={reset}><Icon name="new"/>新对话</Button>}</nav></header>
+ {panel&&<AccountDialog user={user} historyIntent={panel==='history'} api={api} onUser={changeAccount} onOpen={openHistory} onClose={()=>setPanel('')}/>}
  {chat?<main className="room"><section className="messages" aria-label="解题对话" aria-live="polite">
  <div className="user">{pic&&<img src={pic} alt="原题照片"/>}{problem}</div>
  {hist.map((m,i)=><div key={i} className={m.role==='学生'?'user':'assistant'} aria-label={m.role}>{m.text}</div>)}
  {busy&&<p role="status" className="pending">思考中…</p>}<div ref={end}/></section>
- <div className="dock">{errorView}{done&&<div className="finished"><Button className="photo" isDisabled={busy} onPress={reset}>开始新对话</Button>{item===lessons[6]&&<Button className="subtle" isDisabled={busy} onPress={async()=>{const id=crypto.randomUUID();B(true);try{if(server)await api('record',{id,turn:0,problem:'解方程：3x + 5 = 26。',student:'',tutor:'独立算一算，x 等于几？',done:false});}catch(err){E(err.message);return;}finally{B(false);}conversation.current=id;setProblem('解方程：3x + 5 = 26。');setPic('');setItem({steps:[['独立算一算，x 等于几？','7','试着回忆上一题的两个运算。','先抵消常数，再让系数化一。']]});S(0);L(0);H([tutor('独立算一算，x 等于几？')]);D(false);focusDraft()}}>做一道变式</Button>}</div>}{composer}</div>
+ <div className="dock">{errorView}{done&&<div className="finished"><Button className="photo" isDisabled={busy} onPress={reset}>开始新对话</Button>{item===lessons[6]&&<Button className="subtle" isDisabled={busy} onPress={async()=>{const id=crypto.randomUUID();B(true);try{if(server)await sendTurn('record',{id,turn:0,problem:'解方程：3x + 5 = 26。',student:'',tutor:'独立算一算，x 等于几？',done:false});}catch(err){E(err.message);return;}finally{B(false);}conversation.current=id;setProblem('解方程：3x + 5 = 26。');setPic('');setItem(variant);S(0);L(0);H([tutor('独立算一算，x 等于几？')]);D(false);focusDraft()}}>做一道变式</Button>}</div>}{composer}</div>
  </main>:<main className="welcome"><div className="center"><h1>{pic?'核对一下题目':<>今天想<span>弄懂什么？</span></>}</h1>{composer}{busy&&<p className="pending" role="status">{!problem&&pic?'正在识别题面…':'正在处理…'}</p>}{errorView}</div></main>}
  <input hidden ref={input} type="file" accept="image/png,image/jpeg,image/webp" onChange={photo}/>
  <input hidden ref={camera} type="file" accept="image/png,image/jpeg,image/webp" capture="environment" onChange={photo}/>

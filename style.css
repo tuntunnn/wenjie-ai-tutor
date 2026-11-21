@@ -28,3 +28,13 @@ h1 span{color:#28796e}
 @media(max-width:750px){header{height:66px;padding-inline:18px}.brand-mark{width:32px;height:32px}.center{width:100%}.room{width:100%}.welcome{padding:12px 16px max(64px,11vh)}.composer{padding:18px 16px 14px;border-radius:21px}.welcome textarea{min-height:92px;font-size:16px}h1{margin-bottom:24px}}
 
 .upload{color:#386458;font-size:14px;font-weight:570;border-radius:22px;padding:8px 12px;min-height:42px}.upload:hover,.upload[data-hovered]{background:#edf5ef}
+header nav,.panel-head,.panel-account{display:flex;align-items:center;gap:8px}
+.login-trigger,.panel-submit{background:#286e62;color:white;border-radius:20px;padding:7px 19px}.login-trigger:hover,.panel-submit:hover{background:#20594f}
+.account-dialog{width:min(440px,calc(100vw - 32px));max-height:80dvh;border:1px solid var(--line);border-radius:20px;padding:24px;color:var(--ink);background:#fcfefb;box-shadow:0 16px 70px #244c4329}
+.account-dialog::backdrop{background:#1d3b382f}.panel-head,.panel-account{justify-content:space-between}
+.panel-head h2{margin:0;font-size:23px}.close-panel{padding:0 8px;font-size:24px;color:#617b70}
+.panel-intro,.panel-empty,.panel-account,.history-list small{color:#536e65;font-size:14px}
+.account-dialog label{display:block;margin:16px 0;font-size:14px}.account-dialog input{display:block;margin-top:5px;width:100%;border:1px solid var(--line);border-radius:10px;background:white;color:var(--ink);font:inherit;padding:10px 12px}
+.account-dialog input:focus{outline:2px solid #75ad9a}.panel-submit,.switch-auth{width:100%;min-height:40px}.switch-auth{color:var(--teal);font-size:14px;margin-top:5px}.panel-account{margin:10px 0;border-bottom:1px solid var(--line)}
+.history-list{list-style:none;margin:0;padding:0}.history-list button{width:100%;display:grid;text-align:left;justify-content:stretch;gap:3px;padding:12px 8px;border-radius:9px}.history-list button:hover{background:#e9f4ec}.history-list strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:550}
+@media(max-width:440px){header{padding-inline:12px}.brand{gap:5px}header nav{gap:1px}header .new{padding:6px 7px}}
